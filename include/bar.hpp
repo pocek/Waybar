@@ -12,6 +12,9 @@
 #include <vector>
 
 #include "AModule.hpp"
+#include "modules/custom.hpp"
+#include "util/json.hpp"
+#include "util/worker_thread.hpp"
 #include "xdg-output-unstable-v1-client-protocol.h"
 
 namespace waybar {
@@ -102,6 +105,7 @@ class Bar {
   void setupAltFormatKeyForModule(const std::string &module_name);
   void setupAltFormatKeyForModuleList(const char *module_list_name);
   void setMode(const bar_mode &);
+  void customExecOutputCallback(std::string output);
 
   /* Copy initial set of modes to allow customization */
   bar_mode_map configured_modes = PRESET_MODES;
@@ -120,6 +124,10 @@ class Bar {
   std::unique_ptr<BarIpcClient> _ipc_client;
 #endif
   std::vector<std::shared_ptr<waybar::AModule>> modules_all_;
+  waybar::util::JsonParser                      parser_;
+  // Contains pointers to modules in modules_left_, etc.
+  std::map<std::string, waybar::modules::Custom *>         custom_modules_;
+  std::vector<std::unique_ptr<waybar::util::WorkerThread>> custom_threads_;
 };
 
 }  // namespace waybar

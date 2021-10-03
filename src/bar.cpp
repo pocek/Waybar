@@ -604,6 +604,20 @@ waybar::Bar::Bar(struct waybar_output* w_output, const Json::Value& w_config)
 #endif
 
   setupWidgets();
+
+  if (config["custom-execs"].isArray()) {
+    Json::ArrayIndex size = config["custom-execs"].size();
+    for (Json::ArrayIndex i = 0; i < size; i++) {
+      custom_threads_.push_back(std::make_unique<waybar::util::WorkerThread>(
+          config["custom-execs"][i],
+          [this](std::string output) { customExecOutputCallback(output); },
+          [this](int exit_code) {
+            // Do nothing. We don't know which modules this was meant for.
+            spdlog::debug("Custom exec exited with code {}", exit_code);
+          }));
+    }
+  }
+
   window.show_all();
 
   if (spdlog::should_log(spdlog::level::debug)) {
@@ -653,6 +667,19 @@ void waybar::Bar::setMode(const struct bar_mode& mode) {
     window.set_opacity(0);
   }
   surface_impl_->commit();
+}
+
+void waybar::Bar::customExecOutputCallback(std::string output) {
+  // parsed is an object with module names as keys and output (string or object) as values.
+  auto parsed = parser_.parse(output);
+  auto end = parsed.end();
+  for (Json::Value::const_iterator module_it = parsed.begin(); module_it != end; ++module_it) {
+    auto it = custom_modules_.find(module_it.name());
+    if (it != custom_modules_.end()) {
+      it->second->injectOutput(*module_it);
+    } else {
+    }
+  }
 }
 
 void waybar::Bar::onMap(GdkEventAny*) {
@@ -740,6 +767,11 @@ void waybar::Bar::getModules(const Factory& factory, const std::string& pos, Gtk
         if (group) {
           group->pack_start(*module, false, false);
         } else {
+          auto custom = dynamic_cast<waybar::modules::Custom*>(module);
+          if (custom != nullptr) {
+            custom_modules_[name.asString()] = custom;
+          }
+
           if (pos == "modules-left") {
             modules_left_.emplace_back(module_sp);
           }
